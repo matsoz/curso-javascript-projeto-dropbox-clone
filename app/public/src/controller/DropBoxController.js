@@ -9,9 +9,27 @@ class DropBoxController{
         this.nameFileEl = this.snackBarModalEl.querySelector('.filename');
         this.timeLeftEl = this.snackBarModalEl.querySelector('.timeleft');
 
-
+        this.connectFirebase();
         this.initEvents();
 
+    }
+
+    connectFirebase(){
+        // Your web app's Firebase configuration
+        // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+        var firebaseConfig = {
+            apiKey: "AIzaSyCTRqTOciKzHiMsarr3zxh5ewguiQ8cQbQ",
+            authDomain: "dropbox-clone-sozza.firebaseapp.com",
+            databaseURL: "https://dropbox-clone-sozza-default-rtdb.firebaseio.com",
+            projectId: "dropbox-clone-sozza",
+            storageBucket: "dropbox-clone-sozza.appspot.com",
+            messagingSenderId: "343953169447",
+            appId: "1:343953169447:web:a1405b3c07b5a9a5d80202",
+            measurementId: "G-HQD6FBE8EV"
+        };
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        firebase.analytics();
     }
 
     initEvents(){
@@ -25,13 +43,49 @@ class DropBoxController{
         this.inputFilesEl.addEventListener('change', event=>{
 
             console.log(event.target.files); //Shows targeted file
-            this.uploadTask(event.target.files);
 
-            this.snackBarModalEl.style.display = 'block'; //Loading bar
-            this.inputFilesEl.value = ''; //Reset selected input file
+            this.uploadOnGoing(); // Upload started and executing
+
+            this.uploadTask(event.target.files).then(responses => {
+                
+                responses.forEach(resp =>{
+                     
+                    //Brackets used to ensure correct funct. due to '-'
+                    console.log(resp.files['input-file']);
+                    
+                    //Push 'input-file' JSON to Firebase reference
+                    this.getFirebaseRef().push().set(resp.files['input-file']); 
+
+                });
+               
+                this.uploadComplete(); //Upload process completed
+
+            }).catch(err=>{
+
+                this.uploadComplete();
+                console.error(err);
+                
+            });
 
         });
 
+    }
+
+    getFirebaseRef(){
+        return firebase.database().ref('files');
+
+    }
+
+    uploadOnGoing(){
+        this.snackBarModalEl.style.display = 'block'; //Display Loading bar
+        this.btnSendFilesEl.disabled = true;
+
+    }
+
+    uploadComplete(){
+        this.snackBarModalEl.style.display = 'none'; //Loading bar
+        this.inputFilesEl.value = ''; //Reset selected input file
+        this.btnSendFilesEl.disabled = false;
     }
 
     uploadTask(files){
@@ -54,7 +108,6 @@ class DropBoxController{
 
                 // Check if and when completed succesfully
                 ajax.onload = event => {
-                    this.snackBarModalEl.style.display = 'none'; //Loading bar hide
                     try{
                         resolve(JSON.parse(ajax.responseText)); //Obtain Server OK response
                     } catch(e){
@@ -64,7 +117,6 @@ class DropBoxController{
                 
                 // Check if error occurred
                 ajax.onerror = event=>{
-                    this.snackBarModalEl.style.display = 'none'; //Loading bar hide
                     reject(event);
                 };
 
