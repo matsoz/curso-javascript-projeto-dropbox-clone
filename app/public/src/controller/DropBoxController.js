@@ -2,15 +2,24 @@ class DropBoxController{
 
     constructor(){
 
+        /*
+        *   When referring to DOM objects, use:
+        *   - '#lalala' to refer to IDs
+        *   - '.lalala' to refer to classes
+        */
+        
         this.btnSendFilesEl = document.querySelector('#btn-send-file');
         this.inputFilesEl = document.querySelector('#files');
         this.snackBarModalEl = document.querySelector('#react-snackbar-root');
         this.progressBarEl = this.snackBarModalEl.querySelector('.mc-progress-bar-fg');
         this.nameFileEl = this.snackBarModalEl.querySelector('.filename');
         this.timeLeftEl = this.snackBarModalEl.querySelector('.timeleft');
+        this.listFilesEl = document.querySelector('#list-of-files-and-directories');
+
 
         this.connectFirebase();
         this.initEvents();
+        this.readFiles();
 
     }
 
@@ -50,6 +59,7 @@ class DropBoxController{
                 
                 responses.forEach(resp =>{
                      
+                    
                     //Brackets used to ensure correct funct. due to '-'
                     console.log(resp.files['input-file']);
                     
@@ -331,14 +341,102 @@ class DropBoxController{
 
     }
 
-    getFileView(file){
+    getFileView(file,key){
         
-        //The <li> HTML corresponding to the file will be returned by the 'getFileIconView'
-        return `
-        <li>
-            ${this.getFileIconView(file)}
-            <div class="name text-center">${file.name}</div>
-        </li>`;
+        let li = document.createElement('li');
+
+        li.dataset.key = key;
+        
+        li.innerHTML =
+            `
+            <li>
+                ${this.getFileIconView(file)}
+                <div class="name text-center">${file.name}</div>
+            </li>`;
+        
+        this.initEventsLi(li);
+        
+        return li;
 
     }
+
+    readFiles() {
+        
+        //Files reference is a collection
+        this.getFirebaseRef().on('value', snapshot => {
+            
+            this.listFilesEl.innerHTML = ''; //Clean contents
+            
+            //Look for refreshed items
+            snapshot.forEach(snapshotItem => {
+
+                let key = snapshotItem.key;
+                let data = snapshotItem.val();
+
+                console.log('Key: ', key, '  Data: ', data);
+
+                //Add HTML refering to the item (HTML element, not JSON)
+                this.listFilesEl.appendChild(this.getFileView(data,key));
+
+            });
+        });
+
+    }
+
+    initEventsLi(li) {
+    
+        li.addEventListener('click', e => {
+          
+			//Short list selection
+			if (e.shiftKey) {
+			
+				let firstLi = this.listFilesEl.querySelector
+					('.selected'); //Selects only the first (querySelector, not all)
+
+			console.log("firstLi: ", firstLi);
+			
+			if (firstLi) {
+				
+				let indexStart;
+				let indexEnd;
+				let lis = li.parentElement.childNodes;
+				
+				li.parentElement.childNodes.forEach((el, index) => {
+					
+					if (firstLi === el) indexStart = index;
+					if (li === el) indexEnd = index;
+
+				});
+
+				let index = [indexStart, indexEnd].sort();
+
+				lis.forEach((el, i) => {
+					
+					if (i >= index[0] && i <= index[1]) {
+						
+						el.classList.add('selected'); //Select intermediate element
+					}
+
+				});
+
+				//console.log('IndexSt: ', indexStart, '   indexEnd: ', indexEnd, ' Array:', index);
+				
+				return true; //Return before toggling the selection below
+			}
+              
+
+          }
+            
+          // Not multi-selection
+          if (!e.ctrlKey) {
+            this.listFilesEl.querySelectorAll("li.selected").forEach((el) => {
+              el.classList.remove("selected");
+            });
+          }
+
+          li.classList.toggle("selected"); //Paint the 'li' with selected color
+        });
+
+    }
+
 }
