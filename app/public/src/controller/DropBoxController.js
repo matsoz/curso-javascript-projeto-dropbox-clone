@@ -14,12 +14,18 @@ class DropBoxController{
         this.progressBarEl = this.snackBarModalEl.querySelector('.mc-progress-bar-fg');
         this.nameFileEl = this.snackBarModalEl.querySelector('.filename');
         this.timeLeftEl = this.snackBarModalEl.querySelector('.timeleft');
-        this.listFilesEl = document.querySelector('#list-of-files-and-directories');
+		this.listFilesEl = document.querySelector('#list-of-files-and-directories');
+		
+		this.btnNewFolder = document.querySelector('#btn-new-folder');
+		this.btnRename = document.querySelector('#btn-rename');
+		this.btnDelete = document.querySelector('#btn-delete');
 
 
         this.connectFirebase();
         this.initEvents();
-        this.readFiles();
+		this.readFiles();
+		
+		this.onselectionchange = new Event('selectionchange'); // Creating new event for Selection Change
 
     }
 
@@ -41,7 +47,37 @@ class DropBoxController{
         firebase.analytics();
     }
 
-    initEvents(){
+	getSelection() {
+		
+		return this.listFilesEl.querySelectorAll('.selected');
+
+	}
+
+	initEvents() {
+		
+		this.listFilesEl.addEventListener('selectionchange', e => {
+			
+			//console.log('Selection change listened: ',e);
+
+			switch (this.getSelection().length) {
+				
+				case 0:
+					this.btnDelete.style.display = 'none';
+					this.btnRename.style.display = 'none';
+					break;
+				
+				case 1:
+					this.btnDelete.style.display = "block";
+                    this.btnRename.style.display = "block";
+					break;
+
+				default:
+					this.btnDelete.style.display = "block";
+                    this.btnRename.style.display = "none";
+				
+			}
+
+		});
 
         this.btnSendFilesEl.addEventListener('click', event =>{
 
@@ -386,7 +422,9 @@ class DropBoxController{
     initEventsLi(li) {
     
         li.addEventListener('click', e => {
-          
+
+			
+
 			//Short list selection
 			if (e.shiftKey) {
 			
@@ -396,46 +434,45 @@ class DropBoxController{
 			console.log("firstLi: ", firstLi);
 			
 			if (firstLi) {
-				
-				let indexStart;
-				let indexEnd;
-				let lis = li.parentElement.childNodes;
-				
-				li.parentElement.childNodes.forEach((el, index) => {
-					
-					if (firstLi === el) indexStart = index;
-					if (li === el) indexEnd = index;
+		let indexStart;
+		let indexEnd;
+		let lis = li.parentElement.childNodes;
 
-				});
+		li.parentElement.childNodes.forEach((el, index) => {
+			if (firstLi === el) indexStart = index;
+			if (li === el) indexEnd = index;
+		});
 
-				let index = [indexStart, indexEnd].sort();
+		let index = [indexStart, indexEnd].sort();
 
-				lis.forEach((el, i) => {
-					
-					if (i >= index[0] && i <= index[1]) {
-						
-						el.classList.add('selected'); //Select intermediate element
-					}
-
-				});
-
-				//console.log('IndexSt: ', indexStart, '   indexEnd: ', indexEnd, ' Array:', index);
-				
-				return true; //Return before toggling the selection below
+		lis.forEach((el, i) => {
+			if (i >= index[0] && i <= index[1]) {
+			el.classList.add("selected"); //Select intermediate element
 			}
-              
+		});
 
-          }
-            
-          // Not multi-selection
-          if (!e.ctrlKey) {
-            this.listFilesEl.querySelectorAll("li.selected").forEach((el) => {
-              el.classList.remove("selected");
-            });
-          }
+		//console.log('IndexSt: ', indexStart, '   indexEnd: ', indexEnd, ' Array:', index);
 
-          li.classList.toggle("selected"); //Paint the 'li' with selected color
-        });
+		this.listFilesEl.dispatchEvent(this.onselectionchange); // Tirggers the Event
+
+		return true; //Return before toggling the selection below
+		}
+
+			}
+				
+			// Not multi-selection
+			if (!e.ctrlKey) {
+			this.listFilesEl.querySelectorAll("li.selected").forEach((el) => {
+				el.classList.remove("selected");
+			});
+			}
+
+			li.classList.toggle("selected"); //Paint the 'li' with selected color
+
+			this.listFilesEl.dispatchEvent(this.onselectionchange); // Triggers the Event
+			
+		});
+
 
     }
 
