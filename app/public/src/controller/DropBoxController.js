@@ -53,8 +53,77 @@ class DropBoxController{
 
 	}
 
+	removeTask() {
+	
+		let promises = [];
+
+		this.getSelection().forEach(li => {
+				
+			let file = JSON.parse(li.dataset.file);
+			let key = li.dataset.key;
+
+			let formData = new FormData();
+
+			formData.append('path', file.path);
+			formData.append('key', key);
+
+			let promise = this.ajax('/file', 'DELETE', formData); //Ajax method is a promise
+
+			promises.push(promise);
+
+		});
+
+		return Promise.all(promises); //When all resolved
+
+	}
+
+
 	initEvents() {
+
+		this.btnDelete.addEventListener('click', e => {
+			
+			this.removeTask().then(responses => {
+				
+				responses.forEach(r => {
+
+					/*  If 'fields' returned anything,
+					*	then file found in directory and deleted,
+				   	*	so update the firebase.
+				   	*/
+					if (r.fields.key) {
+						
+						this.getFirebaseRef().child(r.fields.key).remove();
+
+						console.log("responses delete:", r.fields.key);
+					}
+
+				});
+
+			}).catch(err => {
+				
+				console.error(err);
+
+			});
+
+		});
 		
+		this.btnRename.addEventListener('click', e => {
+			
+			let li = this.getSelection()[0];
+
+			let file = JSON.parse(li.dataset.file);
+			
+			let name = prompt("Renomear o arquivo: ", file.name);
+
+			if (name) {
+				
+				file.name = name; //rename
+
+				this.getFirebaseRef().child(li.dataset.key).set(file); //update Firebase
+			}
+
+		});
+
 		this.listFilesEl.addEventListener('selectionchange', e => {
 			
 			//console.log('Selection change listened: ',e);
@@ -134,23 +203,16 @@ class DropBoxController{
         this.btnSendFilesEl.disabled = false;
     }
 
-    uploadTask(files){
 
-        let promises = []; //Promises array
+	ajax(url, method = 'GET', formData = new FormData(),
+		onprogress = function () { },
+		onloadstart = function () { }) {
 
-        //Spread operator for looping through non-array data
-        [...files].forEach(file=>{
-            
-            /*
-            * Promises collection for each uploaded file.
-            * Pushes all the files for an array, creating a promise
-            * for each of the files
-            */
-            promises.push(new Promise((resolve,reject)=>{
+		return new Promise((resolve, reject) => {
+			
+				let ajax = new XMLHttpRequest();
 
-                let ajax = new XMLHttpRequest();
-
-                ajax.open('POST','/upload'); // POST to 'upload' route
+                ajax.open(method,url); // POST to 'upload' route
 
                 // Check if and when completed succesfully
                 ajax.onload = event => {
@@ -167,21 +229,45 @@ class DropBoxController{
                 };
 
                 // Track-down the uploading progress
-                ajax.upload.onprogress = event =>{
-                        
-                    this.uploadProgress(event,file);
+				ajax.upload.onprogress = onprogress;
 
-                };
-
-                let formData = new FormData(); //FormData to read the selected uploaded file
-
-                formData.append('input-file',file); //Append the sent file
-
-                this.startUploadTime=Date.now(); //Capture time when the Upload started
+                //let formData = new FormData(); //FormData to read the selected uploaded file
+                //formData.append('input-file',file); //Append the sent file
+                //this.startUploadTime=Date.now();
+			
+				onloadstart(); //Capture time when the Upload started
 
                 ajax.send(formData); //Send file via Ajax
+			
+		});
+	}
+
+    uploadTask(files){
+
+        let promises = []; //Promises array
+
+        //Spread operator for looping through non-array data
+		[...files].forEach(file => {
+			
+			let formData = new FormData();
+
+			formData.append("input-file", file);
             
-            }));
+			let promise = this.ajax("/upload","POST",formData,
+									() => {
+										this.uploadProgress(event, file);
+									},
+									() => {
+										this.startUploadTime = Date.now();
+									}
+								);
+
+            /*
+            * Promises collection for each uploaded file.
+            * Pushes all the files for an array, creating a promise
+            * for each of the files
+            */
+            promises.push(promise);
 
         });
 
@@ -381,7 +467,9 @@ class DropBoxController{
         
         let li = document.createElement('li');
 
-        li.dataset.key = key;
+		// Datasets are 'tokens' carried by the HTML element
+		li.dataset.key = key;
+		li.dataset.file = JSON.stringify(file);
         
         li.innerHTML =
             `
@@ -422,8 +510,6 @@ class DropBoxController{
     initEventsLi(li) {
     
         li.addEventListener('click', e => {
-
-			
 
 			//Short list selection
 			if (e.shiftKey) {
