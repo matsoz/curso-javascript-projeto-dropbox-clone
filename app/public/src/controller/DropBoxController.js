@@ -8,6 +8,9 @@ class DropBoxController{
         *   - '.lalala' to refer to classes
         */
         
+		this.currentFolder = ['main'];
+
+		this.navEl = document.querySelector('#browse-location');
         this.btnSendFilesEl = document.querySelector('#btn-send-file');
         this.inputFilesEl = document.querySelector('#files');
         this.snackBarModalEl = document.querySelector('#react-snackbar-root');
@@ -23,7 +26,10 @@ class DropBoxController{
 
         this.connectFirebase();
         this.initEvents();
-		this.readFiles();
+		
+		this.openFolder();
+		
+
 		
 		this.onselectionchange = new Event('selectionchange'); // Creating new event for Selection Change
 
@@ -77,8 +83,24 @@ class DropBoxController{
 
 	}
 
-
 	initEvents() {
+
+		this.btnNewFolder.addEventListener('click', e => {
+			
+			let name = prompt("Nome da nova pasta:");
+
+			if (name) {
+				
+				// If name provided, add the file type 'folder'
+				this.getFirebaseRef().push().set({
+					name,
+					type: 'folder',
+					path:this.currentFolder.join('/')
+				});
+
+			}
+
+		});
 
 		this.btnDelete.addEventListener('click', e => {
 			
@@ -186,8 +208,11 @@ class DropBoxController{
 
     }
 
-    getFirebaseRef(){
-        return firebase.database().ref('files');
+    getFirebaseRef(path){
+      
+		if (!path) path = this.currentFolder.join('/');
+
+		return firebase.database().ref(path);
 
     }
 
@@ -202,7 +227,6 @@ class DropBoxController{
         this.inputFilesEl.value = ''; //Reset selected input file
         this.btnSendFilesEl.disabled = false;
     }
-
 
 	ajax(url, method = 'GET', formData = new FormData(),
 		onprogress = function () { },
@@ -486,6 +510,8 @@ class DropBoxController{
 
     readFiles() {
         
+		this.lastFolder = this.currentFolder.join('/');
+
         //Files reference is a collection
         this.getFirebaseRef().on('value', snapshot => {
             
@@ -497,19 +523,109 @@ class DropBoxController{
                 let key = snapshotItem.key;
                 let data = snapshotItem.val();
 
-                console.log('Key: ', key, '  Data: ', data);
+                //console.log('Key: ', key, '  Data: ', data);
 
-                //Add HTML refering to the item (HTML element, not JSON)
-                this.listFilesEl.appendChild(this.getFileView(data,key));
+				// Only render if there are valid properties (ignore ROUTES)
+				if (data.type) {
+       			
+					//Add HTML refering to the item (HTML element, not JSON)
+        		  this.listFilesEl.appendChild(this.getFileView(data, key));
+      			
+				}
+
+ 
 
             });
         });
 
     }
 
+	openFolder() {
+				
+		if (this.lastFolder) {
+			
+			this.getFirebaseRef(this.lastFolder)
+				.off('value'); //Stop refreshing files from prev. folder
+
+		}
+		
+		this.renderNav();
+		this.readFiles();
+
+	}
+
+	renderNav() {
+	
+		let nav = document.createElement('nav'); //Create the nav 'parent' element
+		let path = [];
+
+		for (let i = 0; i < this.currentFolder.length; i++){
+		
+			let folderName = this.currentFolder[i];
+			let span = document.createElement('span');
+
+			path.push(folderName);
+
+			// Checks if it's the current / last folder of the navigator
+			if (i === this.currentFolder.length - 1) {
+				span.innerHTML = folderName;
+			}
+			else {
+				span.className = "breadcrumb-segment__wrapper";
+
+				span.innerHTML = `
+							<span class="ue-effect-container uee-BreadCrumbSegment-link-0">
+								<a href="#" data-path="${path.join("/")}" class="breadcrumb-segment">${folderName}</a>
+							</span>
+							<svg width="24" height="24" viewBox="0 0 24 24" class="mc-icon-template-stateless" style="top: 4px; position: relative;">
+								<title>arrow-right</title>
+								<path d="M10.414 7.05l4.95 4.95-4.95 4.95L9 15.534 12.536 12 9 8.464z" fill="#637282" fill-rule="evenodd"></path>
+							</svg>
+						`;
+			}
+
+			nav.appendChild(span); //Adds span to parent element
+	
+    }
+
+		this.navEl.innerHTML = nav.innerHTML; //Attributes created element to DOM element
+
+		this.navEl.querySelectorAll('a').forEach(a => {
+			
+			a.addEventListener('click', e => {
+				
+				e.preventDefault();
+
+				this.currentFolder = a.dataset.path.split('/'); //Transform in array again
+				this.openFolder();
+
+			});
+
+		});
+  
+  }
+
     initEventsLi(li) {
     
-        li.addEventListener('click', e => {
+		li.addEventListener('dblclick', e => {
+			
+			let file = JSON.parse(li.dataset.file);
+
+			switch (file.type) {
+				
+				case 'folder':
+					this.currentFolder.push(file.name); // Updates current folder path
+					this.openFolder(); // Opens the updated folder
+					break;
+				
+				default:
+					window.open('/file?path=' + file.path);
+
+			}
+
+		});
+		
+		li.addEventListener('click', e => {
 
 			//Short list selection
 			if (e.shiftKey) {
