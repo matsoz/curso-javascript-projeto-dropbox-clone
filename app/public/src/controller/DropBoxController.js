@@ -184,16 +184,22 @@ class DropBoxController{
 
             this.uploadTask(event.target.files).then(responses => {
                 
-                responses.forEach(resp =>{
-                     
-                    
-                    //Brackets used to ensure correct funct. due to '-'
-                    console.log(resp.files['input-file']);
-                    
-                    //Push 'input-file' JSON to Firebase reference
-                    this.getFirebaseRef().push().set(resp.files['input-file']); 
+				responses.forEach(resp => {
+					
+					console.log('responses: ', resp);
+					console.log('resp type: ', resp.contentType);
 
-                });
+					//Push to Firebase RealTime also
+					this.getFirebaseRef().push().set({
+
+						name: resp.name,
+						type: resp.contentType,
+						path: resp.fullPath,
+						size: resp.size
+
+					});
+
+				});
                
                 this.uploadComplete(); //Upload process completed
 
@@ -273,25 +279,57 @@ class DropBoxController{
         //Spread operator for looping through non-array data
 		[...files].forEach(file => {
 			
-			let formData = new FormData();
+			/*
+			* Promises collection for each uploaded file.
+			* Pushes all the files for an array, creating a promise
+			* for each of the files
+			*/
+			promises.push(new Promise((resolve, reject) => {
 
-			formData.append("input-file", file);
-            
-			let promise = this.ajax("/upload","POST",formData,
-									() => {
-										this.uploadProgress(event, file);
-									},
-									() => {
-										this.startUploadTime = Date.now();
-									}
-								);
+				console.log('Current Folder:', this.currentFolder.join('/'));
+				
+				//Create a file reference
+				let fileRef = firebase
+				.storage()
+				.ref(this.currentFolder.join('/'))
+				.child(file.name);
 
-            /*
-            * Promises collection for each uploaded file.
-            * Pushes all the files for an array, creating a promise
-            * for each of the files
-            */
-            promises.push(promise);
+				let task = fileRef.put(file);
+
+				task.on(
+					"state_changed",
+					(snapshot) => {
+						//On Progress block
+						console.log("progress:", snapshot);
+						this.uploadProgress({
+							loaded: snapshot.bytesTransferred,
+							total: snapshot.totalBytes
+						}, file);
+					},
+					(error) => {
+						//On error block
+						console.error(error);
+						reject(error);
+					},
+					(snapshot) => {
+						//Resolve block
+
+						fileRef.getMetadata().then(metadata => {
+							
+							resolve(metadata);
+
+						}).catch(err => {
+
+							reject(err);
+							
+						});
+
+						console.log("success: ", snapshot);
+
+					}
+				);
+				
+			}));
 
         });
 
